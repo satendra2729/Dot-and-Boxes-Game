@@ -1,0 +1,669 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Dots and Boxes</title>
+   <!-- Load Tailwind CSS -->
+   <script src="https://cdn.tailwindcss.com"></script>
+   <!-- Load Inter font -->
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+  
+   <style>
+       /* Custom styles */
+       body {
+           font-family: 'Inter', sans-serif;
+           overscroll-behavior: none; /* Prevents pull-to-refresh on mobile */
+       }
+      
+       /* Define player colors */
+       :root {
+           --p1-color: #EF4444; /* red-500 */
+           --p1-color-light: #FEE2E2; /* red-100 */
+           --p2-color: #3B82F6; /* blue-500 */
+           --p2-color-light: #DBEAFE; /* blue-100 */
+           --p3-color: #22C55E; /* green-500 */
+           --p3-color-light: #DCFCE7; /* green-100 */
+           --p4-color: #EAB308; /* yellow-500 */
+           --p4-color-light: #FEF9C3; /* yellow-100 */
+           --hover-color: #D1D5DB; /* gray-300 */
+       }
+      
+       /* Style for the active player's score card */
+       .player-card.active {
+           transform: scale(1.05);
+           box-shadow: 0 0 15px 0 rgba(0,0,0,0.2);
+           border-width: 2px;
+       }
+
+
+       #game-canvas {
+           touch-action: none; /* Disables touch scrolling on the canvas */
+           width: 100%;
+           height: auto;
+           aspect-ratio: 1 / 1;
+           max-width: 600px; /* Max size for large screens */
+           max-height: 600px;
+       }
+   </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+
+   <div class="w-full max-w-2xl mx-auto">
+      
+       <!-- Setup Screen -->
+       <div id="setup-screen" class="bg-white p-8 rounded-lg shadow-xl text-center">
+           <h1 class="text-3xl font-bold mb-6 text-gray-800">Dots and Boxes</h1>
+          
+           <!-- Number of Players -->
+           <div class="mb-6">
+               <label for="num-players" class="block text-lg font-medium text-gray-700 mb-2">Players:</label>
+               <select id="num-players" class="w-full max-w-xs mx-auto p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                   <option value="2" selected>2 Players</option>
+                   <option value="3">3 Players</option>
+                   <option value="4">4 Players</option>
+               </select>
+           </div>
+          
+           <!-- Grid Size -->
+           <div class="mb-8">
+               <label for="grid-size" class="block text-lg font-medium text-gray-700 mb-2">Grid Size (Dots):</label>
+               <select id="grid-size" class="w-full max-w-xs mx-auto p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                   <option value="4">4 x 4</option>
+                   <option value="5">5 x 5</option>
+                   <option value="6" selected>6 x 6</option>
+                   <option value="7">7 x 7</option>
+                   <option value="8">8 x 8</option>
+               </select>
+           </div>
+          
+           <!-- Start Button -->
+           <button id="start-game-btn" class="w-full max-w-xs mx-auto bg-blue-600 hover:bg-blue-700 text-white text-xl font-bold py-3 px-6 rounded-lg shadow-lg transform transition-transform hover:scale-105 duration-200">
+               Start Game
+           </button>
+       </div>
+
+
+       <!-- Game Screen (Initially Hidden) -->
+       <div id="game-screen" class="hidden">
+           <!-- Scoreboard -->
+           <div id="scoreboard" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+               <!-- Player cards will be injected here by JS -->
+           </div>
+
+
+           <!-- Turn Indicator -->
+           <div id="turn-indicator" class="text-center text-2xl font-bold mb-4 p-3 rounded-lg shadow-md bg-white">
+               <!-- Turn text will be injected here -->
+           </div>
+
+
+           <!-- Game Canvas -->
+           <div class="relative w-full max-w-xl mx-auto bg-white rounded-lg shadow-xl overflow-hidden">
+               <canvas id="game-canvas"></canvas>
+           </div>
+
+
+           <!-- Restart Button -->
+           <button id="restart-game-btn" class="w-full max-w-xs mx-auto bg-gray-600 hover:bg-gray-700 text-white text-lg font-bold py-3 px-6 rounded-lg shadow-lg transform transition-transform hover:scale-105 duration-200 mt-6 block">
+               New Game
+           </button>
+       </div>
+
+
+       <!-- Game Over Modal (Initially Hidden) -->
+       <div id="game-over-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+           <div class="bg-white p-8 rounded-lg shadow-2xl text-center max-w-sm w-full">
+               <h2 id="winner-text" class="text-3xl font-bold mb-6"></h2>
+               <div id="final-scores" class="text-left mb-6 space-y-2">
+                   <!-- Final scores will be injected here -->
+               </div>
+               <button id="play-again-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xl font-bold py-3 px-6 rounded-lg shadow-lg transform transition-transform hover:scale-105 duration-200">
+                   Play Again
+               </button>
+           </div>
+       </div>
+
+
+   </div>
+
+
+   <!-- JavaScript Logic -->
+   <script>
+       document.addEventListener('DOMContentLoaded', () => {
+           // --- DOM Elements ---
+           const setupScreen = document.getElementById('setup-screen');
+           const gameScreen = document.getElementById('game-screen');
+           const startGameBtn = document.getElementById('start-game-btn');
+           const restartGameBtn = document.getElementById('restart-game-btn');
+           const playAgainBtn = document.getElementById('play-again-btn');
+          
+           const numPlayersSelect = document.getElementById('num-players');
+           const gridSizeSelect = document.getElementById('grid-size');
+          
+           const scoreboard = document.getElementById('scoreboard');
+           const turnIndicator = document.getElementById('turn-indicator');
+           const gameOverModal = document.getElementById('game-over-modal');
+           const winnerText = document.getElementById('winner-text');
+           const finalScores = document.getElementById('final-scores');
+          
+           const canvas = document.getElementById('game-canvas');
+           const ctx = canvas.getContext('2d');
+
+
+           // --- Game Configuration ---
+           const PLAYER_CONFIG = {
+               1: { name: 'Player A', color: '#EF4444', lightColor: '#FEE2E2', tailwind: 'border-red-500' },
+               2: { name: 'Player B', color: '#3B82F6', lightColor: '#DBEAFE', tailwind: 'border-blue-500' },
+               3: { name: 'Player C', color: '#22C55E', lightColor: '#DCFCE7', tailwind: 'border-green-500' },
+               4: { name: 'Player D', color: '#EAB308', lightColor: '#FEF9C3', tailwind: 'border-yellow-500' }
+           };
+
+
+           // --- Game State ---
+           let gridSize = 6; // Number of dots (e.g., 6x6)
+           let numPlayers = 2;
+           let players = [];
+           let currentPlayerIndex = 0;
+           let hLines = []; // Horizontal lines
+           let vLines = []; // Vertical lines
+           let boxes = []; // Box owners
+          
+           let dotRadius = 5;
+           let lineThickness = 6;
+           let spacing = 100; // Logical spacing
+           let canvasSize = 600; // Logical canvas size
+           let clickableZone = 20; // Pixel tolerance for clicking a line
+          
+           let selectedDot = null; // { r, c } of the first dot clicked
+           let hoveredDot = null; // { r, c } of the dot being hovered
+           let totalBoxes = 0;
+           let boxesFilled = 0;
+
+
+           // --- Event Listeners ---
+           startGameBtn.addEventListener('click', initGame);
+           restartGameBtn.addEventListener('click', showSetupScreen);
+           playAgainBtn.addEventListener('click', () => {
+               gameOverModal.classList.add('hidden');
+               initGame(); // Re-initialize with same settings
+           });
+          
+           canvas.addEventListener('mousemove', handleMouseMove);
+           canvas.addEventListener('click', handleClick);
+           // Add touch support
+           canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+           canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+
+
+
+           // --- Game Initialization ---
+           function initGame() {
+               // Get settings
+               numPlayers = parseInt(numPlayersSelect.value);
+               gridSize = parseInt(gridSizeSelect.value);
+               totalBoxes = (gridSize - 1) * (gridSize - 1);
+               boxesFilled = 0;
+              
+               // Set logical canvas size based on grid
+               spacing = canvasSize / (gridSize + 1); // Add padding around
+               dotRadius = Math.max(3, Math.min(8, spacing * 0.1));
+               lineThickness = Math.max(2, Math.min(10, spacing * 0.08));
+               clickableZone = spacing * 0.25;
+
+
+               // Set physical canvas size (for high DPI)
+               const dpr = window.devicePixelRatio || 1;
+               canvas.width = canvasSize * dpr;
+               canvas.height = canvasSize * dpr;
+               ctx.scale(dpr, dpr);
+               canvas.style.width = `${canvasSize}px`;
+               canvas.style.height = `${canvasSize}px`;
+               // Use CSS to make it responsive
+               canvas.style.width = '100%';
+               canvas.style.height = 'auto';
+
+
+
+
+               // Reset state
+               players = [];
+               for (let i = 0; i < numPlayers; i++) {
+                   players.push({ ...PLAYER_CONFIG[i+1], score: 0 });
+               }
+               currentPlayerIndex = 0;
+               selectedDot = null;
+               hoveredDot = null;
+              
+               // Initialize arrays
+               // hLines[r][c] is the line connecting dot (r, c) and (r, c+1)
+               hLines = Array(gridSize).fill(0).map(() => Array(gridSize - 1).fill(null));
+               // vLines[r][c] is the line connecting dot (r, c) and (r+1, c)
+               vLines = Array(gridSize - 1).fill(0).map(() => Array(gridSize).fill(null));
+               boxes = Array(gridSize - 1).fill(0).map(() => Array(gridSize - 1).fill(null));
+
+
+               // Update UI
+               setupScreen.classList.add('hidden');
+               gameScreen.classList.remove('hidden');
+               gameOverModal.classList.add('hidden');
+              
+               updateScoreboard();
+               updateTurnIndicator();
+               drawGame();
+           }
+
+
+           function showSetupScreen() {
+               gameScreen.classList.add('hidden');
+               setupScreen.classList.remove('hidden');
+               gameOverModal.classList.add('hidden');
+           }
+
+
+           // --- UI Updates ---
+           function updateScoreboard() {
+               scoreboard.innerHTML = '';
+               players.forEach((player, index) => {
+                   const isActive = (index === currentPlayerIndex);
+                   const card = document.createElement('div');
+                   card.className = `player-card p-4 rounded-lg shadow-md transition-all duration-200 border-b-8 ${player.tailwind} ${isActive ? 'active bg-white' : 'bg-gray-50'}`;
+                   card.innerHTML = `
+                       <div class="font-bold text-lg" style="color: ${player.color}">${player.name}</div>
+                       <div class="text-3xl font-extrabold text-gray-800">${player.score}</div>
+                   `;
+                   scoreboard.appendChild(card);
+               });
+           }
+
+
+           function updateTurnIndicator() {
+               const player = players[currentPlayerIndex];
+               turnIndicator.textContent = `${player.name}'s Turn`;
+               turnIndicator.style.backgroundColor = player.lightColor;
+               turnIndicator.style.color = player.color;
+               turnIndicator.style.borderColor = player.color;
+               turnIndicator.style.borderWidth = '2px';
+           }
+
+
+           // --- Drawing ---
+           function drawGame() {
+               ctx.clearRect(0, 0, canvasSize, canvasSize);
+              
+               // Draw Boxes
+               for (let r = 0; r < gridSize - 1; r++) {
+                   for (let c = 0; c < gridSize - 1; c++) {
+                       if (boxes[r][c] !== null) {
+                           const player = players[boxes[r][c]];
+                           ctx.fillStyle = player.lightColor;
+                           ctx.fillRect(getDotPos(c), getDotPos(r), spacing, spacing);
+                          
+                           // Draw player initial
+                           ctx.fillStyle = player.color;
+                           ctx.font = `bold ${spacing * 0.6}px 'Inter'`;
+                           ctx.textAlign = 'center';
+                           ctx.textBaseline = 'middle';
+                           ctx.fillText(player.name.charAt(player.name.length - 1), getDotPos(c) + spacing / 2, getDotPos(r) + spacing / 2 + (spacing * 0.05));
+                       }
+                   }
+               }
+
+
+               // Draw Lines (Horizontal and Vertical)
+               // Horizontal lines
+               for (let r = 0; r < gridSize; r++) {
+                   for (let c = 0; c < gridSize - 1; c++) {
+                       if (hLines[r][c] !== null) {
+                           drawHLine(r, c, players[hLines[r][c]].color);
+                       }
+                   }
+               }
+               // Vertical lines
+               for (let r = 0; r < gridSize - 1; r++) {
+                   for (let c = 0; c < gridSize; c++) {
+                       if (vLines[r][c] !== null) {
+                           drawVLine(r, c, players[vLines[r][c]].color);
+                       }
+                   }
+               }
+              
+               // Draw Hover Line - REMOVED
+
+
+               // Draw Dots
+               ctx.fillStyle = '#4B5563'; // gray-600
+               const currentPlayerColor = players[currentPlayerIndex].color;
+               const hoverColor = 'var(--hover-color)';
+
+
+               for (let r = 0; r < gridSize; r++) {
+                   for (let c = 0; c < gridSize; c++) {
+                       const dot = { r, c };
+                       let radius = dotRadius;
+                       let color = '#4B5563'; // gray-600
+
+
+                       if (selectedDot) {
+                           if (dot.r === selectedDot.r && dot.c === selectedDot.c) {
+                               // This is the selected dot
+                               radius = dotRadius * 1.8;
+                               color = currentPlayerColor;
+                           } else if (isValidMove(selectedDot, dot)) {
+                               // This is a valid target dot
+                               radius = dotRadius * 1.5;
+                               color = currentPlayerColor;
+                           }
+                       } else if (hoveredDot && dot.r === hoveredDot.r && dot.c === hoveredDot.c) {
+                           // This is the hovered dot (and nothing is selected)
+                           radius = dotRadius * 1.5;
+                           color = hoverColor;
+                       }
+                      
+                       ctx.fillStyle = color;
+                       ctx.beginPath();
+                       ctx.arc(getDotPos(c), getDotPos(r), radius, 0, 2 * Math.PI);
+                       ctx.fill();
+                   }
+               }
+           }
+
+
+           function getDotPos(index) {
+               // Calculate position with padding
+               return (index + 0.5) * spacing + (spacing / 2);
+           }
+
+
+           function drawHLine(r, c, color) {
+               ctx.fillStyle = color;
+               ctx.fillRect(getDotPos(c), getDotPos(r) - lineThickness / 2, spacing, lineThickness);
+           }
+
+
+           function drawVLine(r, c, color) {
+               ctx.fillStyle = color;
+               ctx.fillRect(getDotPos(c) - lineThickness / 2, getDotPos(r), lineThickness, spacing);
+           }
+
+
+           // --- Game Logic ---
+          
+           function getMousePos(evt) {
+               const rect = canvas.getBoundingClientRect();
+               const scaleX = canvasSize / rect.width;
+               const scaleY = canvasSize / rect.height;
+              
+               let clientX, clientY;
+               if (evt.touches && evt.touches[0]) {
+                   clientX = evt.touches[0].clientX;
+                   clientY = evt.touches[0].clientY;
+               } else {
+                   clientX = evt.clientX;
+                   clientY = evt.clientY;
+               }
+              
+               return {
+                   x: (clientX - rect.left) * scaleX,
+                   y: (clientY - rect.top) * scaleY
+               };
+           }
+
+
+           /**
+            * Finds the dot {r, c} closest to the canvas coordinates (x, y).
+            */
+           function getHoveredDot(x, y) {
+               // Adjust clickable zone to be a bit more generous than just the dot radius
+               const dotClickableRadius = spacing * 0.25;
+              
+               for (let r = 0; r < gridSize; r++) {
+                   for (let c = 0; c < gridSize; c++) {
+                       const dotX = getDotPos(c);
+                       const dotY = getDotPos(r);
+                       // Using squared distance to avoid square root calculation
+                       const distSq = (x - dotX)**2 + (y - dotY)**2;
+                      
+                       if (distSq < dotClickableRadius**2) {
+                           return { r, c };
+                       }
+                   }
+               }
+               return null;
+           }
+
+
+           /**
+            * Gets the line index {type, r, c} between two adjacent dots.
+            */
+           function getLineBetweenDots(dot1, dot2) {
+               if (dot1.r === dot2.r) {
+                   // Horizontal line
+                   const r = dot1.r;
+                   const c = Math.min(dot1.c, dot2.c);
+                   return { type: 'h', r, c };
+               } else if (dot1.c === dot2.c) {
+                   // Vertical line
+                   const r = Math.min(dot1.r, dot2.r);
+                   const c = dot1.c;
+                   return { type: 'v', r, c };
+               }
+               return null;
+           }
+
+
+           /**
+            * Checks if a move between two dots is valid (adjacent and line not taken).
+            */
+           function isValidMove(dot1, dot2) {
+               const isAdjacent = (dot1.r === dot2.r && Math.abs(dot1.c - dot2.c) === 1) ||
+                                (dot1.c === dot2.c && Math.abs(dot1.r - dot2.r) === 1);
+              
+               if (!isAdjacent) return false;
+              
+               const line = getLineBetweenDots(dot1, dot2);
+               if (!line) return false;
+              
+               if (line.type === 'h') {
+                   return hLines[line.r][line.c] === null;
+               } else if (line.type === 'v') {
+                   return vLines[line.r][line.c] === null;
+               }
+               return false;
+           }
+
+
+
+
+           function handleMouseMove(e) {
+               const { x, y } = getMousePos(e);
+               const dot = getHoveredDot(x, y);
+              
+               if (dot && (!hoveredDot || dot.r !== hoveredDot.r || dot.c !== hoveredDot.c)) {
+                   hoveredDot = dot;
+                   if (!selectedDot) drawGame(); // Only draw hover if nothing is selected
+               } else if (!dot && hoveredDot) {
+                   hoveredDot = null;
+                   if (!selectedDot) drawGame();
+               }
+           }
+          
+           function handleTouchMove(e) {
+               e.preventDefault(); // Prevent scrolling
+               // We don't update hover on touch-move, only on touch-end
+           }
+          
+           function handleTouchEnd(e) {
+               e.preventDefault();
+               // Get the position of the finger lift
+               const { x, y } = getMousePos(e.changedTouches[0]);
+               const dot = getHoveredDot(x, y);
+              
+               handleClickLogic(dot);
+              
+               hoveredDot = null; // Clear hover after tap
+               drawGame();
+           }
+
+
+           function handleClick(e) {
+               const { x, y } = getMousePos(e);
+               const dot = getHoveredDot(x, y);
+               handleClickLogic(dot);
+               drawGame();
+           }
+
+
+           function handleClickLogic(clickedDot) {
+               if (!clickedDot) {
+                   // Clicked in empty space, deselect
+                   selectedDot = null;
+                   return;
+               }
+
+
+               if (!selectedDot) {
+                   // This is the first dot selection
+                   selectedDot = clickedDot;
+                   return;
+               }
+
+
+               // We have a selectedDot, and we just clicked another dot
+               if (selectedDot.r === clickedDot.r && selectedDot.c === clickedDot.c) {
+                   // Clicked the same dot, deselect
+                   selectedDot = null;
+                   return;
+               }
+
+
+               if (isValidMove(selectedDot, clickedDot)) {
+                   // This is a valid move!
+                   const line = getLineBetweenDots(selectedDot, clickedDot);
+                   let scored = false;
+
+
+                   if (line.type === 'h') {
+                       hLines[line.r][line.c] = currentPlayerIndex;
+                       scored = checkBoxes(line);
+                   } else if (line.type === 'v') {
+                       vLines[line.r][line.c] = currentPlayerIndex;
+                       scored = checkBoxes(line);
+                   }
+                  
+                   selectedDot = null; // Reset selection
+
+
+                   if (!scored) {
+                       // Switch to next player
+                       currentPlayerIndex = (currentPlayerIndex + 1) % numPlayers;
+                   }
+                   // If scored, current player stays the same
+                  
+                   updateScoreboard();
+                   updateTurnIndicator();
+                  
+                   if (boxesFilled === totalBoxes) {
+                       endGame();
+                   }
+               } else {
+                   // Clicked an invalid dot (not adjacent or line already taken)
+                   // Make this the new selected dot
+                   selectedDot = clickedDot;
+               }
+           }
+
+
+           function checkBoxes(line) {
+               let scored = false;
+               const { type, r, c } = line;
+              
+               if (type === 'h') {
+                   // line.r is dot row, line.c is line col
+                   // Check box below
+                   if (r < gridSize - 1 && checkSquare(r, c)) {
+                       boxes[r][c] = currentPlayerIndex;
+                       players[currentPlayerIndex].score++;
+                       boxesFilled++;
+                       scored = true;
+                   }
+                   // Check box above
+                   if (r > 0 && checkSquare(r - 1, c)) {
+                       boxes[r - 1][c] = currentPlayerIndex;
+                       players[currentPlayerIndex].score++;
+                       boxesFilled++;
+                       scored = true;
+                   }
+               } else if (type === 'v') {
+                   // line.r is line row, line.c is dot col
+                   // Check box to the right
+                   if (c < gridSize - 1 && checkSquare(r, c)) {
+                       boxes[r][c] = currentPlayerIndex;
+                       players[currentPlayerIndex].score++;
+                       boxesFilled++;
+                       scored = true;
+                   }
+                   // Check box to the left
+                   if (c > 0 && checkSquare(r, c - 1)) {
+                       boxes[r][c - 1] = currentPlayerIndex;
+                       players[currentPlayerIndex].score++;
+                       boxesFilled++;
+                       scored = true;
+                   }
+               }
+               return scored;
+           }
+
+
+           function checkSquare(r, c) {
+               // Check if box (r, c) is complete. r, c are box indices (0 to gridSize-2)
+               if (c >= gridSize - 1 || r >= gridSize - 1 || r < 0 || c < 0) return false;
+              
+               const top = hLines[r][c] !== null;
+               const bottom = hLines[r + 1][c] !== null;
+               const left = vLines[r][c] !== null;
+               const right = vLines[r][c + 1] !== null;
+              
+               return top && bottom && left && right;
+           }
+          
+           function endGame() {
+               // Find winner(s)
+               let maxScore = -1;
+               players.forEach(p => {
+                   if (p.score > maxScore) maxScore = p.score;
+               });
+              
+               const winners = players.filter(p => p.score === maxScore);
+              
+               if (winners.length === 1) {
+                   winnerText.textContent = `${winners[0].name} Wins!`;
+               } else {
+                   winnerText.textContent = "It's a Draw!";
+               }
+              
+               // Display final scores
+               finalScores.innerHTML = '';
+               const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+               sortedPlayers.forEach(p => {
+                   finalScores.innerHTML += `
+                       <div class="flex justify-between items-center text-lg">
+                           <span class="font-bold" style="color: ${p.color}">${p.name}:</span>
+                           <span class="font-bold text-gray-800">${p.score}</span>
+                       </div>
+                   `;
+               });
+              
+               gameOverModal.classList.remove('hidden');
+           }
+          
+           // Show setup on initial load
+           showSetupScreen();
+       });
+   </script>
+</body>
+</html>
